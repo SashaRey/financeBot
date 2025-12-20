@@ -1,7 +1,15 @@
 package org.example.bot;
 
+import org.example.bot.command.Command;
+import org.example.bot.command.CommandRegistry;
+import org.example.bot.command.CommandResult;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -13,20 +21,20 @@ import java.util.*;
 public class TelegramBot extends TelegramLongPollingBot {
 
     private Map<Long, String> userStates = new HashMap<>();
-//    private Map<Long, Double> userBalances = new HashMap<>();
-//    private Map<Long, List<Expense>> userExpenses = new HashMap<>();
-
-    private Map<Long, Double> temporaryAmounts = new HashMap<>(); // Новый Map для временных сумм
-    private final String botToken;
-    private final String botUsername;
+    private Map<Long, Double> temporaryAmounts = new HashMap<>();
+    private String botToken = "7596704485:AAENl2PrL6D7Qxp4ilcQh9KLAR0VrDSXnsg";
+    private String botUsername = "finance_matmech_bot";
     private final ExpenseDao expenseDao;
+    private final CommandRegistry commandRegistry;
+    private final org.example.bot.conversation.ConversationManager conversationManager;
 
 
-    public TelegramBot(String botToken, String botUsername, ExpenseDao expenseDao) {
+    public TelegramBot(String botToken, String botUsername, ExpenseDao expenseDao, CommandRegistry commandRegistry, org.example.bot.conversation.ConversationManager conversationManager) {
         this.botToken = botToken;
         this.botUsername = botUsername;
         this.expenseDao = expenseDao;
-
+        this.commandRegistry = commandRegistry;
+        this.conversationManager = conversationManager;
     }
 
     @Override
@@ -41,36 +49,98 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (!update.hasMessage() || !update.getMessage().hasText()) {
+        if (update.hasCallbackQuery()) {
+            var cq = update.getCallbackQuery();
+            Long chatId = cq.getMessage().getChatId();
+            String data = cq.getData();
+            try {
+                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup();
+                edit.setChatId(cq.getMessage().getChatId().toString());
+                edit.setMessageId(cq.getMessage().getMessageId());
+                edit.setReplyMarkup(null);
+                execute(edit);
+            } catch (TelegramApiException ignore) {}
+
+            CommandResult result = conversationManager.handleCallback(chatId, data);
+
+            AnswerCallbackQuery acq = new AnswerCallbackQuery();
+            acq.setCallbackQueryId(cq.getId());
+            try { execute(acq); } catch (TelegramApiException ignore) {}
+
+            ReplyKeyboardMarkup menu = new ReplyKeyboardMarkup();
+            menu.setResizeKeyboard(true);
+            menu.setOneTimeKeyboard(false);
+            java.util.List<KeyboardRow> rows = new java.util.ArrayList<>();
+            KeyboardRow row1 = new KeyboardRow();
+            row1.add(new KeyboardButton("➕ Расход"));
+            row1.add(new KeyboardButton("💰 Доход"));
+            KeyboardRow row2 = new KeyboardRow();
+            row2.add(new KeyboardButton("💎 Баланс"));
+            rows.add(row1);
+            rows.add(row2);
+            menu.setKeyboard(rows);
+
+            sendMessage(chatId, result.getText(), menu, null);
             return;
         }
 
+        if (!update.hasMessage()) return;
         Message message = update.getMessage();
+        if (!message.hasText()) return;
         Long chatId = message.getChatId();
         String text = message.getText();
 
-        // Инициализация данных пользователя
-//        userBalances.putIfAbsent(chatId, 0.0);
-//        userExpenses.putIfAbsent(chatId, new ArrayList<>());
-
-        String response = processCommand(chatId, text);
-        sendMessage(chatId, response);
+        if (conversationManager != null && conversationManager.hasConversation(chatId) && (text == null || !text.startsWith("/"))) {
+            CommandResult result = conversationManager.handleMessage(chatId, text);
+            sendMessage(chatId, result.getText(), null, result.getInlineKeyboard());
+        } else {
+            CommandResult cmdResult = processCommand(chatId, text, update);
+            sendMessage(chatId, cmdResult.getText(), cmdResult.getReplyKeyboard(), cmdResult.getInlineKeyboard());
+        }
     }
 
-    private String processCommand(Long chatId, String text) {
+    private CommandResult processCommand(Long chatId, String text, Update update) {
         String state = userStates.get(chatId);
 
         if (state != null) {
-            return handleState(chatId, text, state);
+            return CommandResult.text(handleState(chatId, text, state));
         }
 
-        return switch (text.toLowerCase()) {
-            case "/start" -> handleStart(chatId);
-            case "/add" -> handleAdd(chatId);
-            case "/balance" -> handleBalance(chatId);
-            case "/expenses" -> handleExpenses(chatId);
-            case "/help" -> handleHelp(chatId);
-            default -> handleUnknown(chatId, text);
+        if (text != null && text.startsWith("/")) {
+            String[] parts = text.trim().split("\\s+");
+            String cmdName = parts[0].toLowerCase();
+            java.util.Optional<Command> cmd = commandRegistry != null ? commandRegistry.get(cmdName) : java.util.Optional.empty();
+            if (cmd.isPresent()) {
+                String[] args = parts.length > 1 ? java.util.Arrays.copyOfRange(parts, 1, parts.length) : new String[0];
+                try {
+                    return cmd.get().execute(update, args);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return CommandResult.text("❌ Ошибка при выполнении команды: " + e.getMessage());
+                }
+            }
+        }
+
+        String key = text.toLowerCase();
+        // Поддерживаем ярлыки кнопок ReplyKeyboard
+        if (text.equals("➕ Расход") || text.equalsIgnoreCase("Расход")) key = "/add";
+        if (text.equals("💰 Доход") || text.equalsIgnoreCase("Доход")) key = "/income";
+        if (text.equals("💎 Баланс") || text.equalsIgnoreCase("Баланс")) key = "/balance";
+
+        // Обработка интерактивного старта транзакции через ConversationManager
+        if ("/add".equals(key)) {
+            return conversationManager.startTransaction(chatId, org.example.bot.model.TransactionType.EXPENSE);
+        }
+        if ("/income".equals(key)) {
+            return conversationManager.startTransaction(chatId, org.example.bot.model.TransactionType.INCOME);
+        }
+
+        return switch (key) {
+            case "/start" -> CommandResult.text(handleStart(chatId));
+            case "/balance" -> CommandResult.text(handleBalance(chatId));
+            case "/expenses" -> CommandResult.text(handleExpenses(chatId));
+            case "/help" -> CommandResult.text(handleHelp(chatId));
+            default -> CommandResult.text(handleUnknown(chatId, text));
         };
     }
 
@@ -193,9 +263,15 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private void sendMessage(Long chatId, String text) {
+        sendMessage(chatId, text, null, null);
+    }
+
+    private void sendMessage(Long chatId, String text, ReplyKeyboardMarkup replyKeyboard, InlineKeyboardMarkup inlineKeyboard) {
         SendMessage message = new SendMessage();
         message.setChatId(chatId.toString());
         message.setText(text);
+        if (replyKeyboard != null) message.setReplyMarkup(replyKeyboard);
+        if (inlineKeyboard != null) message.setReplyMarkup(inlineKeyboard);
 
         try {
             execute(message);
