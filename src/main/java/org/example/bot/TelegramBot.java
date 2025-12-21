@@ -60,9 +60,48 @@ public class TelegramBot extends TelegramLongPollingBot {
             Long chatId = cq.getMessage().getChatId();
             String data = cq.getData();
 
-            // Handle delete callbacks first
+            // Handle delete callbacks: first step -> ask for confirmation
             if (data != null && data.startsWith("DEL:")) {
                 String idStr = data.substring("DEL:".length());
+                try {
+                    Long txId = Long.parseLong(idStr);
+                    // Edit message to show confirmation buttons
+                    String confirmText = "Вы уверены, что хотите удалить транзакцию " + txId + "?";
+                    List<List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows = new ArrayList<>();
+                    org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton yes = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
+                    yes.setText("✅ Подтвердить");
+                    yes.setCallbackData("DELCONF:" + txId);
+                    org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton no = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
+                    no.setText("❌ Отмена");
+                    no.setCallbackData("DELCANCEL:" + txId);
+                    List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> r = new ArrayList<>();
+                    r.add(yes); r.add(no); rows.add(r);
+                    org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup keyboard = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                    keyboard.setKeyboard(rows);
+                    try {
+                        org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText();
+                        edit.setChatId(cq.getMessage().getChatId().toString());
+                        edit.setMessageId(cq.getMessage().getMessageId());
+                        edit.setText(confirmText);
+                        edit.setReplyMarkup(keyboard);
+                        execute(edit);
+                    } catch (TelegramApiException ignore) {}
+                    AnswerCallbackQuery acq = new AnswerCallbackQuery();
+                    acq.setCallbackQueryId(cq.getId());
+                    try { execute(acq); } catch (TelegramApiException ignore) {}
+                    return;
+                } catch (Exception ex) {
+                    AnswerCallbackQuery acq = new AnswerCallbackQuery();
+                    acq.setCallbackQueryId(cq.getId());
+                    acq.setText("❌ Ошибка");
+                    try { execute(acq); } catch (TelegramApiException ignore) {}
+                    return;
+                }
+            }
+
+            // Confirmation accepted -> perform delete
+            if (data != null && data.startsWith("DELCONF:")) {
+                String idStr = data.substring("DELCONF:".length());
                 try {
                     Long txId = Long.parseLong(idStr);
                     var user = userService.registerOrGet(chatId, null, null);
@@ -76,24 +115,24 @@ public class TelegramBot extends TelegramLongPollingBot {
                     int limit = 10;
                     String newHist = transactionService.getHistory(user.getId(), limit);
                     var last = transactionService.findLast(user.getId(), limit);
-                    List<List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows = new ArrayList<>();
+                    List<List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows2 = new ArrayList<>();
                     for (var t : last) {
                         org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btn = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
                         btn.setText("Удалить /del_" + t.getId());
                         btn.setCallbackData("DEL:" + t.getId());
                         List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> row = new ArrayList<>();
                         row.add(btn);
-                        rows.add(row);
+                        rows2.add(row);
                     }
-                    org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup keyboard = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
-                    keyboard.setKeyboard(rows);
+                    org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup keyboard2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                    keyboard2.setKeyboard(rows2);
 
                     try {
                         org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText();
                         edit.setChatId(cq.getMessage().getChatId().toString());
                         edit.setMessageId(cq.getMessage().getMessageId());
                         edit.setText(newHist);
-                        edit.setReplyMarkup(keyboard);
+                        edit.setReplyMarkup(keyboard2);
                         execute(edit);
                     } catch (TelegramApiException ignore) {}
 
@@ -102,6 +141,46 @@ public class TelegramBot extends TelegramLongPollingBot {
                     AnswerCallbackQuery acq = new AnswerCallbackQuery();
                     acq.setCallbackQueryId(cq.getId());
                     acq.setText("❌ Ошибка удаления");
+                    try { execute(acq); } catch (TelegramApiException ignore) {}
+                    return;
+                }
+            }
+
+            // Cancellation of deletion -> rebuild original history view
+            if (data != null && data.startsWith("DELCANCEL:")) {
+                String idStr = data.substring("DELCANCEL:".length());
+                try {
+                    var user = userService.registerOrGet(chatId, null, null);
+                    int limit = 10;
+                    String newHist = transactionService.getHistory(user.getId(), limit);
+                    var last = transactionService.findLast(user.getId(), limit);
+                    List<List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton>> rows2 = new ArrayList<>();
+                    for (var t : last) {
+                        org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton btn = new org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton();
+                        btn.setText("Удалить /del_" + t.getId());
+                        btn.setCallbackData("DEL:" + t.getId());
+                        List<org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton> row = new ArrayList<>();
+                        row.add(btn);
+                        rows2.add(row);
+                    }
+                    org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup keyboard2 = new org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup();
+                    keyboard2.setKeyboard(rows2);
+                    try {
+                        org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText();
+                        edit.setChatId(cq.getMessage().getChatId().toString());
+                        edit.setMessageId(cq.getMessage().getMessageId());
+                        edit.setText(newHist);
+                        edit.setReplyMarkup(keyboard2);
+                        execute(edit);
+                    } catch (TelegramApiException ignore) {}
+                    AnswerCallbackQuery acq = new AnswerCallbackQuery();
+                    acq.setCallbackQueryId(cq.getId());
+                    try { execute(acq); } catch (TelegramApiException ignore) {}
+                    return;
+                } catch (Exception ex) {
+                    AnswerCallbackQuery acq = new AnswerCallbackQuery();
+                    acq.setCallbackQueryId(cq.getId());
+                    acq.setText("❌ Ошибка");
                     try { execute(acq); } catch (TelegramApiException ignore) {}
                     return;
                 }

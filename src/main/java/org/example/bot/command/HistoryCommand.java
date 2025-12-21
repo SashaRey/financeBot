@@ -31,9 +31,13 @@ public class HistoryCommand implements Command {
         Long chatId = update.getMessage().getChatId();
         User u = userService.registerOrGet(chatId, null, null);
         int limit = 10;
+        if (args != null && args.length > 0) {
+            try { limit = Integer.parseInt(args[0]); } catch (Exception ignore) {}
+        }
+
         String hist = transactionService.getHistory(u.getId(), limit);
 
-        // Build inline keyboard with delete buttons
+        // Build inline keyboard with delete buttons (shows "Удалить" -> opens confirmation)
         var last = transactionService.findLast(u.getId(), limit);
         List<List<InlineKeyboardButton>> rows = new ArrayList<>();
         for (Transaction t : last) {
