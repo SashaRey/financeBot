@@ -54,16 +54,33 @@ public class TransactionServiceImpl implements TransactionService {
         var list = transactionRepository.findLastTransactions(userId, limit);
         if (list == null || list.isEmpty()) return "История пуста";
         StringBuilder sb = new StringBuilder();
-        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM").withZone(java.time.ZoneId.systemDefault());
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(java.time.ZoneId.systemDefault());
+        int idx = 0;
         for (var tx : list) {
+            idx++;
             String date = tx.getTimestamp() != null ? fmt.format(tx.getTimestamp()) : "--.--";
             String sign = tx.getType() == TransactionType.EXPENSE ? "-" : "+";
             String cat = "";
             try {
                 if (tx.getCategoryId() != null) cat = " (" + categoryService.findById(tx.getCategoryId()).map(org.example.bot.model.Category::getName).orElse("Неизвестная") + ")";
             } catch (Exception ignore) {}
-            sb.append(date).append(" | ").append(sign).append(tx.getAmount()).append("р").append(cat).append("\n");
+            sb.append(idx).append(") ").append(date).append(" — ").append(sign).append(tx.getAmount()).append(" ₽").append(cat)
+                    .append("\n").append("/del_").append(tx.getId()).append("\n\n");
         }
         return sb.toString();
+    }
+
+    @Override
+    public boolean deleteTransaction(Long userId, Long txId) {
+        var maybe = transactionRepository.findById(txId);
+        if (maybe.isEmpty()) return false;
+        var tx = maybe.get();
+        if (!tx.getUserId().equals(userId)) throw new IllegalArgumentException("Нет доступа к этой транзакции");
+        return transactionRepository.deleteById(txId);
+    }
+
+    @Override
+    public java.util.List<Transaction> findLast(Long userId, int limit) {
+        return transactionRepository.findLastTransactions(userId, limit);
     }
 }

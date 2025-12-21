@@ -91,8 +91,9 @@ public class Main {
 
         try {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+            org.example.bot.util.HistoryMessageStore historyStore = new org.example.bot.util.HistoryMessageStore();
 
-            botsApi.registerBot(new TelegramBot(botToken, botUsername, expenseDao, registry, conversationManager));
+            botsApi.registerBot(new TelegramBot(botToken, botUsername, expenseDao, registry, conversationManager, transactionService, userService, historyStore));
         } catch (TelegramApiException e) {
             e.printStackTrace();
         }

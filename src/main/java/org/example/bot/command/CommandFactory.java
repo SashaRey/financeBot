@@ -15,7 +15,7 @@ public class CommandFactory {
         registry.register("/add", new AddCommand(userService, categoryService, transactionService, conversationManager));
         registry.register("/income", new org.example.bot.command.IncomeCommand(userService, categoryService, transactionService, conversationManager));
         registry.register("/balance", new org.example.bot.command.BalanceCommand(transactionService, userService));
-        registry.register("/history", new HistoryCommand(transactionService, userService));
+        registry.register("/history", new HistoryCommand(transactionService, userService, categoryService));
         return registry;
     }
 }

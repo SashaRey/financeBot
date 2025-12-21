@@ -14,4 +14,5 @@ public interface TransactionRepository {
     BigDecimal sumByUserAndPeriod(Long userId, Instant from, Instant to, TransactionType type);
     Optional<Transaction> findById(Long id);
     List<Transaction> findLastTransactions(Long userId, int limit);
+    boolean deleteById(Long id);
 }

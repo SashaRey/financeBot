@@ -134,6 +134,22 @@ public class JdbcTransactionRepository implements TransactionRepository {
         }
     }
 
+    @Override
+    public boolean deleteById(Long id) {
+        String sql = "DELETE FROM transactions WHERE id = ?";
+        try {
+            Connection conn = dbManager.getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, id);
+                int affected = ps.executeUpdate();
+                try { if (!conn.getAutoCommit()) conn.commit(); } catch (SQLException ignore) {}
+                return affected > 0;
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка при удалении транзакции: " + e.getMessage(), e);
+        }
+    }
+
     private Transaction mapRow(ResultSet rs) throws SQLException {
         Transaction t = new Transaction();
         t.setId(rs.getLong("id"));

@@ -64,4 +64,15 @@ public class InMemoryTransactionRepository implements TransactionRepository {
                 .limit(limit)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public boolean deleteById(Long id) {
+        Transaction removed = byId.remove(id);
+        if (removed != null) {
+            List<Transaction> list = byUser.getOrDefault(removed.getUserId(), new ArrayList<>());
+            list.removeIf(t -> t.getId() == id);
+            return true;
+        }
+        return false;
+    }
 }

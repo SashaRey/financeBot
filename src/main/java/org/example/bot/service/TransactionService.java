@@ -17,4 +17,6 @@ public interface TransactionService {
     java.util.List<Transaction> listTransactions(Long userId, Instant from, Instant to);
     Optional<Transaction> findById(Long id);
     String getHistory(Long userId, int limit);
+    boolean deleteTransaction(Long userId, Long txId);
+    java.util.List<Transaction> findLast(Long userId, int limit);
 }
