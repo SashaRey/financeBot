@@ -16,9 +16,11 @@ import java.util.Optional;
  */
 public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
+    private final org.example.bot.service.CategoryService categoryService;
 
-    public TransactionServiceImpl(TransactionRepository transactionRepository) {
+    public TransactionServiceImpl(TransactionRepository transactionRepository, org.example.bot.service.CategoryService categoryService) {
         this.transactionRepository = transactionRepository;
+        this.categoryService = categoryService;
     }
 
     @Override
@@ -45,5 +47,23 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     public Optional<Transaction> findById(Long id) {
         return transactionRepository.findById(id);
+    }
+
+    @Override
+    public String getHistory(Long userId, int limit) {
+        var list = transactionRepository.findLastTransactions(userId, limit);
+        if (list == null || list.isEmpty()) return "История пуста";
+        StringBuilder sb = new StringBuilder();
+        java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern("dd.MM").withZone(java.time.ZoneId.systemDefault());
+        for (var tx : list) {
+            String date = tx.getTimestamp() != null ? fmt.format(tx.getTimestamp()) : "--.--";
+            String sign = tx.getType() == TransactionType.EXPENSE ? "-" : "+";
+            String cat = "";
+            try {
+                if (tx.getCategoryId() != null) cat = " (" + categoryService.findById(tx.getCategoryId()).map(org.example.bot.model.Category::getName).orElse("Неизвестная") + ")";
+            } catch (Exception ignore) {}
+            sb.append(date).append(" | ").append(sign).append(tx.getAmount()).append("р").append(cat).append("\n");
+        }
+        return sb.toString();
     }
 }

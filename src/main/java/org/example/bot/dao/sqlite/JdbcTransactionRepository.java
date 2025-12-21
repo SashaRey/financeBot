@@ -115,6 +115,25 @@ public class JdbcTransactionRepository implements TransactionRepository {
         }
     }
 
+    @Override
+    public List<Transaction> findLastTransactions(Long userId, int limit) {
+        String sql = "SELECT * FROM transactions WHERE user_id = ? ORDER BY timestamp DESC LIMIT ?";
+        List<Transaction> res = new ArrayList<>();
+        try {
+            Connection conn = dbManager.getConnection();
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, userId);
+                ps.setInt(2, limit);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) res.add(mapRow(rs));
+                }
+            }
+            return res;
+        } catch (SQLException e) {
+            throw new RuntimeException("Ошибка при получении последних транзакций: " + e.getMessage(), e);
+        }
+    }
+
     private Transaction mapRow(ResultSet rs) throws SQLException {
         Transaction t = new Transaction();
         t.setId(rs.getLong("id"));

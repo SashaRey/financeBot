@@ -16,4 +16,5 @@ public interface TransactionService {
     BigDecimal getBalance(Long userId, Instant from, Instant to);
     java.util.List<Transaction> listTransactions(Long userId, Instant from, Instant to);
     Optional<Transaction> findById(Long id);
+    String getHistory(Long userId, int limit);
 }

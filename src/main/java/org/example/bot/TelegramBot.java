@@ -53,15 +53,26 @@ public class TelegramBot extends TelegramLongPollingBot {
             var cq = update.getCallbackQuery();
             Long chatId = cq.getMessage().getChatId();
             String data = cq.getData();
-            try {
-                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup edit = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup();
-                edit.setChatId(cq.getMessage().getChatId().toString());
-                edit.setMessageId(cq.getMessage().getMessageId());
-                edit.setReplyMarkup(null);
-                execute(edit);
-            } catch (TelegramApiException ignore) {}
 
             CommandResult result = conversationManager.handleCallback(chatId, data);
+
+            String resText = result != null && result.getText() != null ? result.getText() : "";
+            String catName = null;
+            int idx = resText.indexOf("(Категория:");
+            if (idx >= 0) {
+                int start = idx + "(Категория:".length();
+                int end = resText.indexOf(')', start);
+                if (end > start) catName = resText.substring(start, end).trim();
+            }
+
+            String editText = catName != null ? ("✅ Категория выбрана: " + catName) : "✅ Категория выбрана";
+            try {
+                org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText editTextMsg = new org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText();
+                editTextMsg.setChatId(cq.getMessage().getChatId().toString());
+                editTextMsg.setMessageId(cq.getMessage().getMessageId());
+                editTextMsg.setText(editText);
+                execute(editTextMsg);
+            } catch (TelegramApiException ignore) {}
 
             AnswerCallbackQuery acq = new AnswerCallbackQuery();
             acq.setCallbackQueryId(cq.getId());
@@ -76,6 +87,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             row1.add(new KeyboardButton("💰 Доход"));
             KeyboardRow row2 = new KeyboardRow();
             row2.add(new KeyboardButton("💎 Баланс"));
+            row2.add(new KeyboardButton("📜 История"));
             rows.add(row1);
             rows.add(row2);
             menu.setKeyboard(rows);
@@ -88,9 +100,18 @@ public class TelegramBot extends TelegramLongPollingBot {
         Message message = update.getMessage();
         if (!message.hasText()) return;
         Long chatId = message.getChatId();
-        String text = message.getText();
+        String text = message.getText().trim();
 
-        if (conversationManager != null && conversationManager.hasConversation(chatId) && (text == null || !text.startsWith("/"))) {
+        boolean isMenuAction = text.startsWith("/")
+                || text.equals("➕ Расход") || text.equalsIgnoreCase("Расход")
+                || text.equals("💰 Доход") || text.equalsIgnoreCase("Доход")
+                || text.equals("💎 Баланс") || text.equalsIgnoreCase("Баланс")
+                || text.equals("📜 История") || text.equalsIgnoreCase("История");
+
+        if (isMenuAction) {
+            CommandResult cmdResult = processCommand(chatId, text, update);
+            sendMessage(chatId, cmdResult.getText(), cmdResult.getReplyKeyboard(), cmdResult.getInlineKeyboard());
+        } else if (conversationManager != null && conversationManager.hasConversation(chatId)) {
             CommandResult result = conversationManager.handleMessage(chatId, text);
             sendMessage(chatId, result.getText(), null, result.getInlineKeyboard());
         } else {
@@ -122,17 +143,30 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
 
         String key = text.toLowerCase();
-        // Поддерживаем ярлыки кнопок ReplyKeyboard
         if (text.equals("➕ Расход") || text.equalsIgnoreCase("Расход")) key = "/add";
         if (text.equals("💰 Доход") || text.equalsIgnoreCase("Доход")) key = "/income";
         if (text.equals("💎 Баланс") || text.equalsIgnoreCase("Баланс")) key = "/balance";
+        if (text.equals("📜 История") || text.equalsIgnoreCase("История")) key = "/history";
+        if (text.equals("❓ Помощь") || text.equalsIgnoreCase("Помощь")) key = "/help";
 
-        // Обработка интерактивного старта транзакции через ConversationManager
         if ("/add".equals(key)) {
             return conversationManager.startTransaction(chatId, org.example.bot.model.TransactionType.EXPENSE);
         }
         if ("/income".equals(key)) {
             return conversationManager.startTransaction(chatId, org.example.bot.model.TransactionType.INCOME);
+        }
+
+        // Если ключ начинается с '/', пробуем выполнить команду из реестра
+        if (key.startsWith("/")) {
+            java.util.Optional<Command> cmd = commandRegistry != null ? commandRegistry.get(key) : java.util.Optional.empty();
+            if (cmd.isPresent()) {
+                try {
+                    return cmd.get().execute(update, new String[0]);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return CommandResult.text("❌ Ошибка при выполнении команды: " + e.getMessage());
+                }
+            }
         }
 
         return switch (key) {

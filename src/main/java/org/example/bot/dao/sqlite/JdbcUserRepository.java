@@ -38,7 +38,6 @@ public class JdbcUserRepository implements UserRepository {
                 try (ResultSet rs = ps.executeQuery()) {
                     if (rs.next()) {
                         User u = mapRow(rs);
-                        System.out.println("[JdbcUserRepository] Found user by telegramId=" + telegramId + " -> id=" + u.getId());
                         return Optional.of(u);
                     }
                     return Optional.empty();
@@ -66,10 +65,9 @@ public class JdbcUserRepository implements UserRepository {
             int affected = ps.executeUpdate();
             if (affected == 0) throw new SQLException("Создание пользователя не получилось, нет затронутых строк");
             try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    user.setId(keys.getLong(1));
-                        System.out.println("[JdbcUserRepository] Inserted user telegramId=" + user.getTelegramId() + " id=" + user.getId());
-                }
+                    if (keys.next()) {
+                        user.setId(keys.getLong(1));
+                    }
             }
                 // Явный commit для надёжности
                 try {
@@ -77,14 +75,7 @@ public class JdbcUserRepository implements UserRepository {
                     if (!conn2.getAutoCommit()) conn2.commit();
                 } catch (SQLException ignore) {}
                 // Диагностика: покажем путь к файлу БД и информацию о файле
-                try {
-                    String dbPath = dbManager.getDbFilePath();
-                    File f = new File(dbPath);
-                    System.out.println("[JdbcUserRepository] user saved. Working dir=" + System.getProperty("user.dir"));
-                    System.out.println("[JdbcUserRepository] Checking DB file: " + f.getAbsolutePath() + " exists=" + f.exists() + " size=" + (f.exists() ? f.length() : 0) + " lastModified=" + (f.exists() ? new Date(f.lastModified()) : "n/a"));
-                } catch (Exception ex) {
-                    System.out.println("[JdbcUserRepository] Diagnostics error: " + ex.getMessage());
-                }
+                // diagnostics removed
 
                 return user;
             }

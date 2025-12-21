@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Comparator;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -53,5 +54,14 @@ public class InMemoryTransactionRepository implements TransactionRepository {
     @Override
     public Optional<Transaction> findById(Long id) {
         return Optional.ofNullable(byId.get(id));
+    }
+
+    @Override
+    public List<Transaction> findLastTransactions(Long userId, int limit) {
+        List<Transaction> list = byUser.getOrDefault(userId, new ArrayList<>());
+        return list.stream()
+                .sorted(Comparator.comparing(Transaction::getTimestamp).reversed())
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 }

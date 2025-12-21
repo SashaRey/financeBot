@@ -24,8 +24,7 @@ public class DatabaseManager implements AutoCloseable {
             this.connection = DriverManager.getConnection(dbUrl);
             // Явно включаем auto-commit для простоты (каждый запрос сразу коммитится)
             this.connection.setAutoCommit(true);
-            // Логируем путь к файлу БД для отладки
-            System.out.println("[DatabaseManager] Connected to DB URL: " + dbUrl);
+            // connected
             // Включаем foreign keys
             try (Statement stmt = connection.createStatement()) {
                 stmt.execute("PRAGMA foreign_keys = ON;");
@@ -83,8 +82,7 @@ public class DatabaseManager implements AutoCloseable {
         try {
             if (connection != null && !connection.isClosed()) connection.close();
         } catch (SQLException e) {
-            // логируем и продолжаем
-            System.err.println("Ошибка при закрытии соединения БД: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

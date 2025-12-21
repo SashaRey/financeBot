@@ -41,8 +41,12 @@ public class StartCommand implements Command {
         row1.add(new KeyboardButton("💰 Доход"));
         KeyboardRow row2 = new KeyboardRow();
         row2.add(new KeyboardButton("💎 Баланс"));
+        row2.add(new KeyboardButton("📜 История"));
+        KeyboardRow row3 = new KeyboardRow();
+        row3.add(new KeyboardButton("❓ Помощь"));
         rows.add(row1);
         rows.add(row2);
+        rows.add(row3);
         keyboard.setKeyboard(rows);
 
         String text = "Привет, " + (u.getDisplayName() != null ? u.getDisplayName() : "пользователь") + "!\nЯ — ваш финансовый трекер.";

@@ -57,7 +57,7 @@ public class Main {
         // Сервисы
         UserService userService = new UserServiceImpl(userRepo);
         CategoryService categoryService = new CategoryServiceImpl(categoryRepo);
-        TransactionService transactionService = new TransactionServiceImpl(transactionRepo);
+        TransactionService transactionService = new TransactionServiceImpl(transactionRepo, categoryService);
 
         // Адаптер для совместимости с существующим TelegramBot
         ExpenseDao expenseDao = new ExpenseDaoAdapter(userService, categoryService, transactionService);
@@ -79,15 +79,6 @@ public class Main {
         // Реестр команд (использует сервисы)
         CommandRegistry registry = CommandFactory.createRegistry(userService, categoryService, transactionService, conversationManager);
 
-        // Диагностика: покажем абсолютный путь к файлу и количество пользователей в таблице
-        try {
-            System.out.println("[Main] DB file absolute path: " + dbManager.getDbFilePath());
-            try (java.sql.Statement st = dbManager.getConnection().createStatement(); java.sql.ResultSet rs = st.executeQuery("SELECT COUNT(*) as c FROM users")) {
-                if (rs.next()) System.out.println("[Main] users count = " + rs.getInt("c"));
-            }
-        } catch (Exception ex) {
-            System.err.println("[Main] Diagnostics error: " + ex.getMessage());
-        }
 
         if (botToken == null || botToken.isEmpty()) {
             System.err.println("❌ BOT_TOKEN не задан!");
@@ -102,11 +93,8 @@ public class Main {
             TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
 
             botsApi.registerBot(new TelegramBot(botToken, botUsername, expenseDao, registry, conversationManager));
-            System.out.println("✅ Финансовый бот запущен!");
-            System.out.println("Бот: " + botUsername);
         } catch (TelegramApiException e) {
             e.printStackTrace();
-            System.err.println("❌ Ошибка при запуске бота: " + e.getMessage());
         }
     }
 }
